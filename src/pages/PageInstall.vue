@@ -113,10 +113,11 @@ const envItems = ref<EnvItem[]>([
 
 const installSteps = ref<InstallStep[]>([
   {
-    name: "安装包管理器", desc: "Windows: Chocolatey / macOS: Homebrew",
+    name: "安装包管理器", desc: "Windows: Chocolatey / macOS: Homebrew（需手动安装）",
     status: "pending", statusText: "等待",
-    // macOS: curl 下载脚本后用管道交给 bash 执行（不能用 $() 展开，Tauri 不走 shell）
-    mac: { cmd: "/bin/bash", args: ["-c", "curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | /bin/bash"] },
+    // macOS: brew 安装脚本需要 sudo 交互，GUI 无 TTY 无法自动执行。
+    // 运行时若检测到 brew 缺失，installPlugin 会阻止并提示用户去 Terminal 手动执行。
+    mac: { cmd: "", args: [] },
     // Windows: PowerShell 执行 Chocolatey 安装脚本
     win: { cmd: "powershell", args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"] },
   },
@@ -212,6 +213,18 @@ async function startInstall() {
       addLog(`▶ ${step.name}...`, "info");
 
       const target = currentOs.value === "windows" ? step.win : step.mac;
+
+      // macOS 包管理器（brew）无法在 GUI 里自动安装，需要手动操作
+      if (!target.cmd) {
+        step.status = "error";
+        step.statusText = "需手动";
+        installError.value = "macOS 下 Homebrew 安装需要在终端手动执行，请打开 Terminal 并运行：\n/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"";
+        addLog("⚠ Homebrew 需要在终端手动安装（需要输入 sudo 密码）", "error");
+        addLog("请打开 Terminal 执行：/bin/bash -c \"$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\"", "info");
+        addLog("安装完成后点击「重新检测」，再继续安装。", "info");
+        break;
+      }
+
       try {
         await invoke("run_command_streaming", { cmd: target.cmd, args: target.args });
         step.status = "done";

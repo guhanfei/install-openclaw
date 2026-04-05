@@ -19,11 +19,9 @@
           @click="handleNavClick(item.id, item.external)">
           <component :is="item.icon" class="nav-icon" :size="16" :stroke-width="1.6" />
           <span>{{ item.label }}</span>
+          <span v-if="item.showVersion" class="nav-version-badge">v{{ appVersion }}</span>
           <span v-if="item.external" class="ext-icon">↗</span>
         </button>
-      </div>
-      <div class="sidebar-footer">
-        <div class="version-badge">v{{ appVersion }}</div>
       </div>
     </aside>
 
@@ -37,11 +35,12 @@
 <script setup lang="ts">
 import { ref, computed } from "vue";
 import {
-  PackagePlus, Power, ArrowUpCircle,
-  BrainCircuit, Wand2, Puzzle, Trash2,
+  Monitor, PackagePlus, Power, ArrowUpCircle,
+  BrainCircuit, Trash2,
   BookOpen, Info,
 } from "lucide-vue-next";
 import { open } from "@tauri-apps/plugin-shell";
+import PageCheckSystem from "./pages/PageCheckSystem.vue";
 import PageInstall from "./pages/PageInstall.vue";
 import PageModels from "./pages/PageModels.vue";
 import PageSkills from "./pages/PageSkills.vue";
@@ -51,24 +50,25 @@ import PageUpdate from "./pages/PageUpdate.vue";
 import PageUninstall from "./pages/PageUninstall.vue";
 import PageAbout from "./pages/PageAbout.vue";
 
-const appVersion = "0.1.0";
+const appVersion = __APP_VERSION__;
 
 const navItems = [
+  { id: "check",     icon: Monitor,        label: "检测本机电脑" },
   { id: "install",   icon: PackagePlus,    label: "安装 OpenClaw" },
   { id: "service",   icon: Power,          label: "启动/停止 OpenClaw" },
   { id: "update",    icon: ArrowUpCircle,  label: "升级 OpenClaw" },
   { id: "models",    icon: BrainCircuit,   label: "模型厂商" },
-  { id: "skills",    icon: Wand2,          label: "Skill 管理" },
-  { id: "plugins",   icon: Puzzle,         label: "插件管理" },
+  // { id: "skills",    icon: Wand2,          label: "Skill 管理" },   // TODO: 待完善
+  // { id: "plugins",   icon: Puzzle,         label: "插件管理" },     // TODO: 待完善
   { id: "uninstall", icon: Trash2,         label: "卸载 OpenClaw" },
 ];
 
 const bottomNavItems = [
-  { id: "docs",  icon: BookOpen, label: "官网文档", external: "https://docs.openclaw.ai" },
-  { id: "about", icon: Info,     label: "关于",     external: "" },
+  { id: "docs",  icon: BookOpen, label: "官网文档", external: "https://docs.openclaw.ai", showVersion: false },
+  { id: "about", icon: Info,     label: "关于",     external: "",                          showVersion: true  },
 ];
 
-const currentPage = ref("install");
+const currentPage = ref("check");
 
 function handleNavClick(id: string, external: string) {
   if (external) {
@@ -80,6 +80,7 @@ function handleNavClick(id: string, external: string) {
 
 const currentComponent = computed(() => {
   const map: Record<string, unknown> = {
+    check: PageCheckSystem,
     install: PageInstall,
     models: PageModels,
     skills: PageSkills,
@@ -177,14 +178,16 @@ const currentComponent = computed(() => {
   margin-left: auto;
 }
 
-.sidebar-footer {
-  padding: 12px 16px;
-  border-top: 1px solid var(--color-border);
-}
-
-.version-badge {
-  font-size: 11px;
-  color: var(--color-text-muted);
+.nav-version-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-primary);
+  background: rgba(108, 99, 255, 0.12);
+  border: 1px solid rgba(108, 99, 255, 0.2);
+  border-radius: 4px;
+  padding: 1px 6px;
+  letter-spacing: 0.02em;
 }
 
 .main-content {

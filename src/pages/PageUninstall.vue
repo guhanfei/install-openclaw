@@ -79,12 +79,16 @@ async function startUninstall() {
   });
 
   try {
-    addLog("▶ 开始卸载 openclaw...", "info");
+    addLog("▶ 第 1 步：停止服务并清理状态...", "info");
     await invoke("run_command_streaming", { cmd: "openclaw", args: ["uninstall", "--all", "--yes", "--non-interactive"] });
-    addLog("✓ openclaw 已卸载", "success");
+    addLog("✓ OpenClaw 服务已卸载", "success");
+
+    addLog("▶ 第 2 步：移除 npm 全局包...", "info");
+    await invoke("run_command_streaming", { cmd: "npm", args: ["rm", "-g", "openclaw"] });
+    addLog("✓ npm 包已移除", "success");
 
     if (removeConfig.value) {
-      addLog("▶ 删除 ~/.openclaw 目录...", "info");
+      addLog("▶ 第 3 步：删除 ~/.openclaw 目录...", "info");
       await invoke("delete_config_dir");
       addLog("✓ ~/.openclaw 已删除", "success");
     }

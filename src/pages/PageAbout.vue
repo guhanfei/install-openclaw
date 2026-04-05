@@ -75,7 +75,7 @@ import { ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-shell";
 
-const appVersion = "0.1.0";
+const appVersion = __APP_VERSION__;
 const checking = ref(false);
 const checked = ref(false);
 const depStatus = ref<Record<string, string>>({});

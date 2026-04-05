@@ -211,6 +211,21 @@ async fn run_command_output(app: tauri::AppHandle, cmd: String, args: Vec<String
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
+/// 用系统文件管理器打开指定目录（macOS: Finder / Windows: Explorer / Linux: xdg-open）
+#[tauri::command]
+fn open_dir(path: String) -> Result<(), String> {
+    let cmd = match std::env::consts::OS {
+        "macos"   => "open",
+        "windows" => "explorer",
+        _         => "xdg-open",
+    };
+    std::process::Command::new(cmd)
+        .arg(&path)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
+}
+
 /// 启动 openclaw gateway（后台非阻塞）
 #[tauri::command]
 fn start_openclaw() -> Result<(), String> {
@@ -222,6 +237,80 @@ fn start_openclaw() -> Result<(), String> {
 }
 
 // ── 内部工具函数 ────────────────────────────────────────────
+
+#[derive(serde::Serialize)]
+struct SystemInfo {
+    os: String,
+    os_version: String,
+    arch: String,
+    cpu_brand: String,
+    total_memory_bytes: u64,
+    disk_total_bytes: u64,
+    disk_free_bytes: u64,
+    openclaw_dir: String,
+    openclaw_dir_exists: bool,
+}
+
+/// 执行简单命令并返回 stdout（用于系统信息采集，同步阻塞）
+fn run_simple(cmd: &str, args: &[&str]) -> String {
+    std::process::Command::new(cmd)
+        .args(args)
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default()
+}
+
+/// 解析 df -k / 输出（1K-blocks），返回 (total_bytes, free_bytes)
+fn parse_df_kblocks(output: &str) -> (u64, u64) {
+    for line in output.lines().skip(1) {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() >= 4 {
+            let total: u64 = parts[1].parse().unwrap_or(0);
+            let avail: u64 = parts[3].parse().unwrap_or(0);
+            return (total * 1024, avail * 1024);
+        }
+    }
+    (0, 0)
+}
+
+
+/// 采集本机系统信息（OS、CPU、内存、磁盘、openclaw 目录）
+#[tauri::command]
+fn get_system_info() -> SystemInfo {
+    let os = std::env::consts::OS.to_string();
+    let dir = openclaw_dir();
+    let openclaw_dir_str = dir.to_string_lossy().to_string();
+    let openclaw_dir_exists = dir.exists();
+
+    match os.as_str() {
+        "macos" => {
+            let os_version = run_simple("sw_vers", &["-productVersion"]);
+            let arch = run_simple("uname", &["-m"]);
+            let cpu_brand = run_simple("sysctl", &["-n", "machdep.cpu.brand_string"]);
+            let total_memory_bytes: u64 = run_simple("sysctl", &["-n", "hw.memsize"]).parse().unwrap_or(0);
+            let (disk_total_bytes, disk_free_bytes) = parse_df_kblocks(&run_simple("df", &["-k", "/"]));
+            SystemInfo { os, os_version, arch, cpu_brand, total_memory_bytes, disk_total_bytes, disk_free_bytes, openclaw_dir: openclaw_dir_str, openclaw_dir_exists }
+        }
+        "windows" => {
+            // 使用 Get-CimInstance（Win10/11 均支持，wmic 在 Win11 22H2+ 已废弃）
+            let ps = |cmd: &str| run_simple("powershell", &["-NoProfile", "-Command", cmd]);
+            let os_version  = ps("(Get-CimInstance Win32_OperatingSystem).Caption");
+            let arch        = std::env::var("PROCESSOR_ARCHITECTURE").unwrap_or_else(|_| "Unknown".to_string());
+            let cpu_brand   = ps("(Get-CimInstance Win32_Processor).Name");
+            let total_memory_bytes: u64 = ps("(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory").parse().unwrap_or(0);
+            // Get-PSDrive C 返回已用/剩余字节数（KB 单位需 *1024，实际返回 MB，需 *1MB）
+            // 用更可靠的 Win32_LogicalDisk
+            let disk_total_bytes: u64 = ps("(Get-CimInstance -Query \"SELECT Size FROM Win32_LogicalDisk WHERE DeviceID='C:'\").Size").parse().unwrap_or(0);
+            let disk_free_bytes: u64  = ps("(Get-CimInstance -Query \"SELECT FreeSpace FROM Win32_LogicalDisk WHERE DeviceID='C:'\").FreeSpace").parse().unwrap_or(0);
+            SystemInfo { os, os_version, arch, cpu_brand, total_memory_bytes, disk_total_bytes, disk_free_bytes, openclaw_dir: openclaw_dir_str, openclaw_dir_exists }
+        }
+        _ => SystemInfo {
+            os, os_version: String::new(), arch: std::env::consts::ARCH.to_string(),
+            cpu_brand: String::new(), total_memory_bytes: 0, disk_total_bytes: 0, disk_free_bytes: 0,
+            openclaw_dir: openclaw_dir_str, openclaw_dir_exists,
+        }
+    }
+}
 
 fn openclaw_dir() -> std::path::PathBuf {
     let home = std::env::var("HOME")
@@ -274,6 +363,8 @@ pub fn run() {
             run_command_output,
             check_openclaw_running,
             check_daemon_installed,
+            get_system_info,
+            open_dir,
             start_openclaw,
         ])
         .run(tauri::generate_context!())

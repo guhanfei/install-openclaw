@@ -76,7 +76,7 @@
           :disabled="daemonBusy"
           @click="installDaemon"
         >
-          {{ daemonBusy ? "安装中..." : "启用自启" }}
+          {{ daemonBusy ? "安装中..." : "启用开机自启" }}
         </button>
         <button
           v-else
@@ -84,7 +84,7 @@
           :disabled="daemonBusy"
           @click="uninstallDaemon"
         >
-          {{ daemonBusy ? "取消中..." : "取消自启" }}
+          {{ daemonBusy ? "取消中..." : "取消开机自启" }}
         </button>
       </div>
       <p v-if="daemonMsg" class="daemon-msg" :class="daemonMsgType">{{ daemonMsg }}</p>
@@ -108,6 +108,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-shell";
 
 interface LogLine { text: string; level: "info" | "error" | "success" }
@@ -162,12 +163,17 @@ async function startService() {
   actionMsg.value = "";
   logs.value = [];
 
+  const unlisten = await listen<{ text: string; level: string }>("log", (e) => {
+    logs.value.push({ text: e.payload.text, level: e.payload.level as LogLine["level"] });
+    nextTick(() => { if (logBox.value) logBox.value.scrollTop = logBox.value.scrollHeight; });
+  });
+
   try {
     if (daemonInstalled.value) {
       // 已安装 daemon：用 openclaw gateway start（有退出码，可检测结果）
       await invoke("run_command_streaming", { cmd: "openclaw", args: ["gateway", "start"] });
     } else {
-      // 未安装 daemon：后台运行 openclaw gateway run
+      // 未安装 daemon：后台运行 openclaw gateway run（spawn，无流式输出）
       await invoke("start_openclaw");
     }
     // 等 1.5 秒后检测一次，给进程启动留时间
@@ -189,6 +195,7 @@ async function startService() {
     logs.value.push({ text: `✗ ${err}`, level: "error" });
   } finally {
     starting.value = false;
+    unlisten();
     nextTick(() => { if (logBox.value) logBox.value.scrollTop = logBox.value.scrollHeight; });
   }
 }
