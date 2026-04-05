@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "OpenClaw 辅助工具",
+  "productName": "OpenClaw-Helper",
   "identifier": "com.guhenfei.openclaw-helper",
   "version": "0.1.23",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "古寒飞自动化 · OpenClaw 高级辅助工具",
+        "title": "古寒飞自动化 · OpenClaw 辅助工具",
         "width": 900,
         "height": 640,
         "minWidth": 720,

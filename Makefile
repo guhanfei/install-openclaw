@@ -53,6 +53,7 @@ all: build-mac build-win
 
 clean:
 	@echo "清理构建产物..."
-	@rm -rf $(CARGO_DIR)/target/release/bundle
+	@rm -rf $(CARGO_DIR)/target/aarch64-apple-darwin/release/bundle
+	@rm -rf $(CARGO_DIR)/target/x86_64-pc-windows-gnu/release/bundle
 	@rm -rf $(BUILD_DIR)
 	@echo "完成！"
