@@ -65,6 +65,42 @@
       </div>
       <p v-if="installError" class="error-hint">{{ installError }}</p>
     </section>
+    <!-- Node.js 加速 -->
+    <section class="section">
+      <div class="reg-header">
+        <h2 class="section-title">Node.js 加速（npm 镜像源）</h2>
+        <button class="btn btn-sm btn-secondary" :disabled="!nrmInstalled || switchingRegistry" @click="loadRegistries">
+          <RefreshCw :size="13" :stroke-width="2" style="display:inline;vertical-align:-2px;margin-right:4px;" />刷新
+        </button>
+      </div>
+
+      <div v-if="!nrmInstalled" class="reg-tip">
+        请先在上方安装 nrm，安装完成后此处自动加载可用镜像。
+      </div>
+
+      <template v-else>
+        <!-- 镜像列表 -->
+        <div class="reg-list">
+          <div
+            v-for="r in registries"
+            :key="r.name"
+            class="reg-item"
+            :class="{ 'reg-item-active': r.active, 'reg-item-switching': switchingRegistry && selectedRegistry === r.name }"
+            @click="!r.active && !switchingRegistry && (selectedRegistry = r.name, switchRegistry())"
+          >
+            <div class="reg-dot" :class="r.active ? 'dot-active' : 'dot-idle'"></div>
+            <div class="reg-info">
+              <span class="reg-name">{{ r.name }}</span>
+              <span class="reg-url">{{ r.url }}</span>
+            </div>
+            <span v-if="r.active" class="reg-badge-active">当前</span>
+            <span v-else-if="switchingRegistry && selectedRegistry === r.name" class="reg-badge-switching">切换中...</span>
+            <span v-else class="reg-badge-use">点击切换</span>
+          </div>
+        </div>
+        <p v-if="registryMsg" class="reg-msg" :class="registryMsgType">{{ registryMsg }}</p>
+      </template>
+    </section>
   </div>
 </template>
 
@@ -72,6 +108,7 @@
 import { ref, computed, onMounted, nextTick } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { RefreshCw } from "lucide-vue-next";
 
 interface EnvItem {
   id: string;
@@ -97,18 +134,27 @@ interface LogLine {
   level: "info" | "error" | "success";
 }
 
+interface Registry { name: string; url: string; active: boolean }
+
 const checking = ref(false);
 const installing = ref(false);
 const installError = ref("");
 const logs = ref<LogLine[]>([]);
 const logBox = ref<HTMLElement | null>(null);
-const currentOs = ref("macos");
+const currentOs = ref("macos")
+const registries = ref<Registry[]>([])
+const selectedRegistry = ref("")
+const switchingRegistry = ref(false)
+const registryMsg = ref("")
+const registryMsgType = ref<"ok" | "err">("ok")
+const nrmInstalled = computed(() => envItems.value.find(e => e.id === "nrm")?.status === "ok");
 
 const envItems = ref<EnvItem[]>([
   { id: "pkgmgr", icon: "🍺", name: "包管理器 (brew/choco)", cmd: "", status: "checking", statusText: "检测中..." },
   { id: "git",    icon: "🔧", name: "Git",                    cmd: "git",  status: "checking", statusText: "检测中..." },
   { id: "node",   icon: "💚", name: "Node.js",                cmd: "node", status: "checking", statusText: "检测中..." },
   { id: "openclaw", icon: "🦞", name: "OpenClaw",             cmd: "openclaw", status: "checking", statusText: "检测中..." },
+  { id: "nrm",      icon: "🚀", name: "nrm（镜像管理）",       cmd: "nrm",      status: "checking", statusText: "检测中..." },
 ]);
 
 const installSteps = ref<InstallStep[]>([
@@ -139,6 +185,12 @@ const installSteps = ref<InstallStep[]>([
     mac: { cmd: "npm", args: ["install", "-g", "openclaw"] },
     win: { cmd: "npm", args: ["install", "-g", "openclaw"] },
   },
+  {
+    name: "安装 nrm", desc: "npm install -g nrm",
+    status: "pending", statusText: "等待",
+    mac: { cmd: "npm", args: ["install", "-g", "nrm"] },
+    win: { cmd: "npm", args: ["install", "-g", "nrm"] },
+  },
 ]);
 
 const allInstalled = computed(() =>
@@ -148,6 +200,7 @@ const allInstalled = computed(() =>
 onMounted(async () => {
   currentOs.value = await invoke<string>("get_os");
   await checkEnv();
+  await loadRegistries();
 });
 
 async function checkEnv() {
@@ -175,14 +228,16 @@ async function checkEnv() {
 
   // 根据已安装情况跳过已完成步骤
   syncStepStatus();
+  await loadRegistries();
 }
 
 function syncStepStatus() {
-  const [pkgOk, gitOk, nodeOk, openclawOk] = envItems.value.map((e) => e.status === "ok");
-  if (pkgOk)     markStepDone(0);
-  if (gitOk)     markStepDone(1);
-  if (nodeOk)    markStepDone(2);
+  const [pkgOk, gitOk, nodeOk, openclawOk, nrmOk] = envItems.value.map((e) => e.status === "ok");
+  if (pkgOk)      markStepDone(0);
+  if (gitOk)      markStepDone(1);
+  if (nodeOk)     markStepDone(2);
   if (openclawOk) markStepDone(3);
+  if (nrmOk)      markStepDone(4);
 }
 
 function markStepDone(i: number) {
@@ -259,6 +314,45 @@ async function retryInstall() {
   await startInstall();
 }
 
+function parseNrmLs(output: string): Registry[] {
+  return output.split("\n")
+    .map(line => {
+      const active = line.trimStart().startsWith("*");
+      const clean = line.replace(/^\s*\*?\s*/, "");
+      const match = clean.match(/^(\S+)\s+-+\s+(https?:\/\/\S+)/);
+      if (!match) return null;
+      return { name: match[1], url: match[2].replace(/\/$/, ""), active };
+    })
+    .filter(Boolean) as Registry[];
+}
+
+async function loadRegistries() {
+  if (!nrmInstalled.value) return;
+  try {
+    const output = await invoke<string>("run_command_output", { cmd: "nrm", args: ["ls"] });
+    registries.value = parseNrmLs(output);
+    const active = registries.value.find(r => r.active);
+    if (active) selectedRegistry.value = active.name;
+  } catch { registries.value = []; }
+}
+
+async function switchRegistry() {
+  if (!selectedRegistry.value) return;
+  switchingRegistry.value = true;
+  registryMsg.value = "";
+  try {
+    await invoke("run_command_output", { cmd: "nrm", args: ["use", selectedRegistry.value] });
+    await loadRegistries();
+    registryMsg.value = `✓ 已切换到 ${selectedRegistry.value}`;
+    registryMsgType.value = "ok";
+  } catch (err) {
+    registryMsg.value = `切换失败：${err}`;
+    registryMsgType.value = "err";
+  } finally {
+    switchingRegistry.value = false;
+  }
+}
+
 function addLog(text: string, level: LogLine["level"]) {
   logs.value.push({ text, level });
   nextTick(() => {
@@ -313,6 +407,28 @@ function addLog(text: string, level: LogLine["level"]) {
 
 .action-row { display: flex; gap: 10px; align-items: center; }
 .error-hint { margin-top: 8px; font-size: 12px; color: var(--color-danger); }
+/* Node.js 加速 */
+.reg-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.reg-tip { font-size: 12px; color: var(--color-text-muted); padding: 10px 0; }
+.reg-list { display: flex; flex-direction: column; gap: 6px; }
+.reg-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 8px; background: var(--color-surface); border: 1px solid var(--color-border); cursor: pointer; transition: all 0.15s; }
+.reg-item:hover:not(.reg-item-active) { border-color: var(--color-primary); }
+.reg-item-active { border-color: rgba(72,187,120,0.35); cursor: default; }
+.reg-item-switching { opacity: 0.6; cursor: wait; }
+.reg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot-active { background: var(--color-success); box-shadow: 0 0 0 3px rgba(72,187,120,0.2); }
+.dot-idle { background: var(--color-border); }
+.reg-info { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.reg-name { font-size: 13px; font-weight: 600; }
+.reg-url { font-size: 11px; font-family: monospace; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reg-badge-active { font-size: 11px; padding: 2px 8px; border-radius: 4px; background: rgba(72,187,120,0.15); color: var(--color-success); border: 1px solid rgba(72,187,120,0.3); flex-shrink: 0; }
+.reg-badge-switching { font-size: 11px; color: var(--color-text-muted); flex-shrink: 0; }
+.reg-badge-use { font-size: 11px; color: var(--color-text-muted); flex-shrink: 0; opacity: 0; transition: opacity 0.15s; }
+.reg-item:hover .reg-badge-use { opacity: 1; color: var(--color-primary); }
+.reg-msg { margin-top: 8px; font-size: 12px; }
+.reg-msg.ok { color: var(--color-success); }
+.reg-msg.err { color: var(--color-danger); }
+
 .btn { padding: 8px 18px; border-radius: 6px; border: none; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
 .btn-primary { background: var(--color-primary); color: #fff; }
 .btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); }
