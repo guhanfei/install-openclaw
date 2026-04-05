@@ -20,24 +20,16 @@
     <!-- 操作按钮 -->
     <section class="section">
       <div class="action-row">
-        <button
-          class="btn btn-primary"
-          :disabled="running || starting"
-          @click="startService"
-        >
+        <button v-if="!running" class="btn btn-primary" :disabled="starting" @click="startService">
           {{ starting ? "启动中..." : "▶ 启动 OpenClaw" }}
         </button>
-        <button
-          class="btn btn-danger"
-          :disabled="!running || stopping"
-          @click="stopService"
-        >
+        <button v-if="running" class="btn btn-danger" :disabled="stopping" @click="stopService">
           {{ stopping ? "停止中..." : "■ 停止 OpenClaw" }}
         </button>
       </div>
       <p v-if="actionMsg" class="action-msg" :class="actionMsgType">{{ actionMsg }}</p>
       <div v-if="running" class="open-section">
-        <button class="btn btn-open" @click="openInBrowser">🌐 打开对话界面</button>
+        <button class="btn btn-primary btn-open" @click="openInBrowser">↗ · 打开 OpenClaw 聊天界面</button>
         <div class="open-url-row">
           <span class="open-url">http://localhost:{{ gatewayPort }}/chat?session=main{{ gatewayToken ? '&token=' + gatewayToken : '' }}</span>
           <button class="copy-btn" title="复制链接" @click="copyUrl">复制</button>
@@ -239,8 +231,7 @@ async function stopService() {
 .btn-danger:hover:not(:disabled) { background: rgba(252, 129, 129, 0.25); }
 .btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
 .open-section { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
-.btn-open { background: rgba(72, 187, 120, 0.15); color: var(--color-success); border: 1px solid rgba(72, 187, 120, 0.3); align-self: flex-start; }
-.btn-open:hover { background: rgba(72, 187, 120, 0.25); }
+.btn-open { align-self: flex-start; }
 .open-url-row { display: flex; align-items: center; gap: 8px; background: #0a0c14; border: 1px solid var(--color-border); border-radius: 6px; padding: 7px 10px; }
 .open-url { flex: 1; font-size: 11px; font-family: monospace; color: var(--color-text-muted); word-break: break-all; }
 .copy-btn { flex-shrink: 0; padding: 3px 10px; font-size: 11px; border-radius: 4px; border: 1px solid var(--color-border); background: var(--color-surface); color: var(--color-text-muted); cursor: pointer; }

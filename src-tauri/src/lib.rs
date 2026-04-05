@@ -186,6 +186,14 @@ fn check_openclaw_running(port: u16) -> bool {
     std::net::TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok()
 }
 
+/// 执行命令并返回 stdout 字符串（用于需要捕获输出的场景，如 npm view）
+#[tauri::command]
+async fn run_command_output(app: tauri::AppHandle, cmd: String, args: Vec<String>) -> Result<String, String> {
+    let shell = app.shell();
+    let out = shell.command(&cmd).args(args).output().await.map_err(|e| e.to_string())?;
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
 /// 启动 openclaw（后台非阻塞，不等待退出）
 #[tauri::command]
 fn start_openclaw() -> Result<(), String> {
@@ -245,6 +253,7 @@ pub fn run() {
             delete_dir,
             get_home_dir,
             get_os,
+            run_command_output,
             check_openclaw_running,
             start_openclaw,
         ])

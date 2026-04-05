@@ -7,14 +7,9 @@
         <span class="logo-text">OpenClaw 助手</span>
       </div>
       <nav class="sidebar-nav">
-        <button
-          v-for="item in navItems"
-          :key="item.id"
-          class="nav-item"
-          :class="{ active: currentPage === item.id }"
-          @click="currentPage = item.id"
-        >
-          <span class="nav-icon">{{ item.icon }}</span>
+        <button v-for="item in navItems" :key="item.id" class="nav-item" :class="{ active: currentPage === item.id }"
+          @click="currentPage = item.id">
+          <component :is="item.icon" class="nav-icon" :size="16" :stroke-width="1.6" />
           <span>{{ item.label }}</span>
         </button>
       </nav>
@@ -32,6 +27,10 @@
 
 <script setup lang="ts">
 import { ref, computed } from "vue";
+import {
+  PackagePlus, Power, ArrowUpCircle,
+  BrainCircuit, Wand2, Puzzle, Trash2,
+} from "lucide-vue-next";
 import PageInstall from "./pages/PageInstall.vue";
 import PageModels from "./pages/PageModels.vue";
 import PageSkills from "./pages/PageSkills.vue";
@@ -43,13 +42,13 @@ import PageUninstall from "./pages/PageUninstall.vue";
 const appVersion = "0.1.0";
 
 const navItems = [
-  { id: "install", icon: "📦", label: "安装 OpenClaw" },
-    { id: "service", icon: "▶", label: "启动/停止 OpenClaw" },
-    { id: "update", icon: "▶", label: "升级 OpenClaw" },
-  { id: "models", icon: "🤖", label: "模型厂商" },
-  { id: "skills", icon: "⚡", label: "Skill 管理" },
-  { id: "plugins", icon: "🔌", label: "插件管理" },
-  { id: "uninstall", icon: "🗑️", label: "卸载 OpenClaw" },
+  { id: "install",   icon: PackagePlus,    label: "安装 OpenClaw" },
+  { id: "service",   icon: Power,          label: "启动/停止 OpenClaw" },
+  { id: "update",    icon: ArrowUpCircle,  label: "升级 OpenClaw" },
+  { id: "models",    icon: BrainCircuit,   label: "模型厂商" },
+  { id: "skills",    icon: Wand2,          label: "Skill 管理" },
+  { id: "plugins",   icon: Puzzle,         label: "插件管理" },
+  { id: "uninstall", icon: Trash2,         label: "卸载 OpenClaw" },
 ];
 
 const currentPage = ref("install");
@@ -134,9 +133,8 @@ const currentComponent = computed(() => {
 }
 
 .nav-icon {
-  font-size: 16px;
   width: 20px;
-  text-align: center;
+  flex-shrink: 0;
 }
 
 .sidebar-footer {

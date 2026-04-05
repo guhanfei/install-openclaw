@@ -114,7 +114,8 @@ async function startUninstall() {
 .warning-desc { font-size: 12px; color: var(--color-text-muted); }
 .warning-desc code { background: var(--color-border); padding: 1px 5px; border-radius: 3px; font-size: 11px; }
 
-.checkbox-row { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; cursor: pointer; line-height: 1.5; }
+.checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; line-height: 1.5; }
+.checkbox-row input[type="checkbox"] { width: 14px; height: 14px; flex-shrink: 0; margin: 0; cursor: pointer; }
 .checkbox-row code { background: var(--color-border); padding: 1px 5px; border-radius: 3px; font-size: 12px; }
 
 .confirm-prompt { font-size: 13px; margin-bottom: 10px; color: var(--color-text-muted); }
