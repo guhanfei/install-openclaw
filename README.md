@@ -1,4 +1,4 @@
-# 古寒飞自动化 · OpenClaw 高级辅助使用工具
+# 古寒飞自动化 · OpenClaw 高级辅助工具
 
 一款跨平台桌面 GUI 程序，帮助用户一键安装、配置并管理 [OpenClaw](https://openclaw.ai)。
 
