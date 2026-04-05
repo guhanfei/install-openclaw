@@ -1,0 +1,26 @@
+[package]
+name = "openclaw-helper"
+version = "0.1.0"
+description = "古寒飞自动化 · OpenClaw 高级辅助使用工具"
+authors = ["Tay"]
+edition = "2021"
+
+[lib]
+name = "openclaw_helper_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
