@@ -36,16 +36,20 @@ import PageInstall from "./pages/PageInstall.vue";
 import PageModels from "./pages/PageModels.vue";
 import PageSkills from "./pages/PageSkills.vue";
 import PagePlugins from "./pages/PagePlugins.vue";
+import PageService from "./pages/PageService.vue";
+import PageUpdate from "./pages/PageUpdate.vue";
 import PageUninstall from "./pages/PageUninstall.vue";
 
 const appVersion = "0.1.0";
 
 const navItems = [
   { id: "install", icon: "📦", label: "安装 OpenClaw" },
+    { id: "service", icon: "▶", label: "启动/停止 OpenClaw" },
+    { id: "update", icon: "▶", label: "升级 OpenClaw" },
   { id: "models", icon: "🤖", label: "模型厂商" },
   { id: "skills", icon: "⚡", label: "Skill 管理" },
   { id: "plugins", icon: "🔌", label: "插件管理" },
-  { id: "uninstall", icon: "🗑️", label: "卸载" },
+  { id: "uninstall", icon: "🗑️", label: "卸载 OpenClaw" },
 ];
 
 const currentPage = ref("install");
@@ -56,6 +60,8 @@ const currentComponent = computed(() => {
     models: PageModels,
     skills: PageSkills,
     plugins: PagePlugins,
+    service: PageService,
+    update: PageUpdate,
     uninstall: PageUninstall,
   };
   return map[currentPage.value];

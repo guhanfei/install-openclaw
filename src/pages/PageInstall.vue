@@ -115,8 +115,10 @@ const installSteps = ref<InstallStep[]>([
   {
     name: "安装包管理器", desc: "Windows: Chocolatey / macOS: Homebrew",
     status: "pending", statusText: "等待",
-    mac: { cmd: "/bin/bash", args: ["-c", "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"] },
-    win: { cmd: "powershell", args: ["-Command", "Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"] },
+    // macOS: curl 下载脚本后用管道交给 bash 执行（不能用 $() 展开，Tauri 不走 shell）
+    mac: { cmd: "/bin/bash", args: ["-c", "curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | /bin/bash"] },
+    // Windows: PowerShell 执行 Chocolatey 安装脚本
+    win: { cmd: "powershell", args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))"] },
   },
   {
     name: "安装 Git", desc: "通过包管理器安装",
