@@ -33,9 +33,6 @@
         </template>
       </div>
       <p v-if="actionMsg" class="action-msg" :class="actionMsgType">{{ actionMsg }}</p>
-      <p v-if="running && !daemonInstalled" class="action-msg daemon-warn">
-        ⚠ 当前未安装开机自启服务，「停止/重启」命令需要 daemon。建议在下方启用开机自启。
-      </p>
       <div v-if="running" class="open-section">
         <button class="btn btn-primary btn-open" @click="openInBrowser">↗ · 打开 OpenClaw 聊天界面</button>
         <div class="open-url-row">
@@ -46,10 +43,14 @@
       </div>
     </section>
 
-    <!-- 启动日志 -->
-    <section v-if="logs.length > 0" class="section">
-      <h2 class="section-title">输出日志</h2>
+    <!-- 输出日志（常驻） -->
+    <section class="section">
+      <div class="toolbar">
+        <h2 class="section-title">输出日志</h2>
+        <button v-if="logs.length > 0" class="btn btn-sm btn-secondary" @click="logs = []">清空</button>
+      </div>
       <div class="log-box" ref="logBox">
+        <div v-if="logs.length === 0" class="log-empty">暂无日志输出</div>
         <div v-for="(log, i) in logs" :key="i" class="log-line" :class="log.level">
           {{ log.text }}
         </div>
@@ -129,6 +130,11 @@ const gatewayPort = ref(18790);
 const gatewayToken = ref("");
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+function pushLog(text: string, level: LogLine["level"]) {
+  logs.value.push({ text, level });
+  nextTick(() => { if (logBox.value) logBox.value.scrollTop = logBox.value.scrollHeight; });
+}
 
 onMounted(async () => {
   // 从 openclaw.json 读取实际端口
@@ -216,35 +222,85 @@ async function copyUrl() {
 async function stopService() {
   stopping.value = true;
   actionMsg.value = "";
+  const unlisten = await listen<{ text: string; level: string }>("log", (e) => {
+    logs.value.push({ text: e.payload.text, level: e.payload.level as LogLine["level"] });
+    nextTick(() => { if (logBox.value) logBox.value.scrollTop = logBox.value.scrollHeight; });
+  });
   try {
-    await invoke("run_command_streaming", { cmd: "openclaw", args: ["gateway", "stop"] });
+    if (daemonInstalled.value) {
+      pushLog("■ 正在停止 OpenClaw（daemon）...", "info");
+      await invoke("run_command_streaming", { cmd: "openclaw", args: ["gateway", "stop"] });
+    } else {
+      pushLog("■ 正在停止 OpenClaw（发送终止信号）...", "info");
+      await invoke("kill_port_process", { port: gatewayPort.value });
+    }
     await new Promise((r) => setTimeout(r, 800));
     await checkStatus();
-    actionMsg.value = running.value ? "⚠ 进程可能仍在运行，请稍后重试" : "✓ 已停止";
-    actionMsgType.value = running.value ? "err" : "ok";
+    if (running.value) {
+      pushLog("⚠ 进程可能仍在运行", "error");
+      actionMsg.value = "⚠ 进程可能仍在运行，请稍后重试";
+      actionMsgType.value = "err";
+    } else {
+      pushLog("✓ OpenClaw 已停止", "success");
+      actionMsg.value = "✓ 已停止";
+      actionMsgType.value = "ok";
+    }
   } catch (err) {
     await checkStatus();
-    actionMsg.value = running.value ? `停止失败：${err}` : "✓ 已停止";
-    actionMsgType.value = running.value ? "err" : "ok";
+    if (running.value) {
+      pushLog(`✗ 停止失败：${err}`, "error");
+      actionMsg.value = `停止失败：${err}`;
+      actionMsgType.value = "err";
+    } else {
+      pushLog("✓ OpenClaw 已停止", "success");
+      actionMsg.value = "✓ 已停止";
+      actionMsgType.value = "ok";
+    }
   } finally {
     stopping.value = false;
+    unlisten();
+    nextTick(() => { if (logBox.value) logBox.value.scrollTop = logBox.value.scrollHeight; });
   }
 }
 
 async function restartService() {
   restarting.value = true;
   actionMsg.value = "";
+  const unlisten = await listen<{ text: string; level: string }>("log", (e) => {
+    logs.value.push({ text: e.payload.text, level: e.payload.level as LogLine["level"] });
+    nextTick(() => { if (logBox.value) logBox.value.scrollTop = logBox.value.scrollHeight; });
+  });
   try {
-    await invoke("run_command_streaming", { cmd: "openclaw", args: ["gateway", "restart"] });
-    await new Promise((r) => setTimeout(r, 1500));
+    if (daemonInstalled.value) {
+      pushLog("↺ 正在重启 OpenClaw（daemon）...", "info");
+      await invoke("run_command_streaming", { cmd: "openclaw", args: ["gateway", "restart"] });
+      await new Promise((r) => setTimeout(r, 1500));
+    } else {
+      pushLog("↺ 正在停止旧进程...", "info");
+      await invoke("kill_port_process", { port: gatewayPort.value });
+      await new Promise((r) => setTimeout(r, 500));
+      pushLog("↺ 正在启动 OpenClaw...", "info");
+      await invoke("start_openclaw");
+      await new Promise((r) => setTimeout(r, 1500));
+    }
     await checkStatus();
-    actionMsg.value = running.value ? "✓ 已重启" : "⚠ 重启后未检测到端口响应，请稍后刷新";
-    actionMsgType.value = running.value ? "ok" : "err";
+    if (running.value) {
+      pushLog("✓ OpenClaw 重启成功", "success");
+      actionMsg.value = "✓ 已重启";
+      actionMsgType.value = "ok";
+    } else {
+      pushLog("⚠ 重启后未检测到端口响应，可能正在初始化", "info");
+      actionMsg.value = "⚠ 重启后未检测到端口响应，请稍后刷新";
+      actionMsgType.value = "err";
+    }
   } catch (err) {
+    pushLog(`✗ 重启失败：${err}`, "error");
     actionMsg.value = `重启失败：${err}`;
     actionMsgType.value = "err";
   } finally {
     restarting.value = false;
+    unlisten();
+    nextTick(() => { if (logBox.value) logBox.value.scrollTop = logBox.value.scrollHeight; });
   }
 }
 
@@ -320,6 +376,7 @@ async function uninstallDaemon() {
 .daemon-warn { color: #f6ad55; }
 
 .log-box { background: #0a0c14; border: 1px solid var(--color-border); border-radius: 8px; padding: 12px 14px; height: 160px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+.log-empty { color: var(--color-text-muted); opacity: 0.4; font-size: 12px; }
 .log-line { line-height: 1.7; white-space: pre-wrap; }
 .log-line.success { color: var(--color-success); }
 .log-line.error { color: var(--color-danger); }

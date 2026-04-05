@@ -226,14 +226,102 @@ fn open_dir(path: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// 启动 openclaw gateway（后台非阻塞）
+/// 启动 openclaw gateway（流式日志 + 检测到 ready 后返回，进程继续后台运行）
+/// 最多等 15 秒；检测到 "listening on" 时立即返回
 #[tauri::command]
-fn start_openclaw() -> Result<(), String> {
-    std::process::Command::new("openclaw")
+async fn start_openclaw(app: tauri::AppHandle) -> Result<(), String> {
+    let shell = app.shell();
+    let (mut rx, _child) = shell
+        .command("openclaw")
         .args(["gateway", "run"])
         .spawn()
-        .map(|_| ())
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+
+    let deadline = tokio::time::Instant::now() + tokio::time::Duration::from_secs(15);
+
+    loop {
+        let result = tokio::time::timeout_at(deadline, rx.recv()).await;
+        match result {
+            Err(_) => break, // 超时，进程仍在运行，直接返回
+            Ok(None) => break, // channel 关闭
+            Ok(Some(event)) => match event {
+                CommandEvent::Stdout(bytes) | CommandEvent::Stderr(bytes) => {
+                    let line = String::from_utf8_lossy(&bytes).trim().to_string();
+                    if !line.is_empty() {
+                        let _ = app.emit("log", LogPayload { text: line.clone(), level: "info".into() });
+                        if line.contains("listening on") {
+                            break; // 网关已就绪，返回控制权；进程继续运行
+                        }
+                    }
+                }
+                CommandEvent::Terminated(s) => {
+                    let code = s.code.unwrap_or(-1);
+                    if code != 0 {
+                        return Err(format!("网关进程意外退出，退出码: {}", code));
+                    }
+                    break;
+                }
+                _ => {}
+            },
+        }
+    }
+    // _child drop 后进程仍独立运行（tauri-plugin-shell 不在 drop 时 kill）
+    Ok(())
+}
+
+/// 强制终止占用指定端口的进程（用于非 daemon 模式下停止网关）
+#[tauri::command]
+fn kill_port_process(port: u16) -> Result<(), String> {
+    match std::env::consts::OS {
+        "macos" | "linux" => {
+            let out = std::process::Command::new("lsof")
+                .args(["-ti", &format!("tcp:{}", port)])
+                .output()
+                .map_err(|e| e.to_string())?;
+            let pids = String::from_utf8_lossy(&out.stdout);
+            let pids = pids.trim();
+            if pids.is_empty() {
+                return Ok(()); // 进程已不存在
+            }
+            // 先 SIGTERM（优雅退出），给进程 2 秒清理时间，再 SIGKILL 兜底
+            for pid in pids.lines() {
+                let _ = std::process::Command::new("kill").args([pid.trim()]).status();
+            }
+            std::thread::sleep(std::time::Duration::from_secs(2));
+            // 再检查一次，如果还在就强杀
+            let out2 = std::process::Command::new("lsof")
+                .args(["-ti", &format!("tcp:{}", port)])
+                .output()
+                .map_err(|e| e.to_string())?;
+            for pid in String::from_utf8_lossy(&out2.stdout).trim().lines() {
+                let _ = std::process::Command::new("kill").args(["-9", pid.trim()]).status();
+            }
+            Ok(())
+        }
+        "windows" => {
+            let out = std::process::Command::new("netstat")
+                .args(["-ano"])
+                .output()
+                .map_err(|e| e.to_string())?;
+            let text = String::from_utf8_lossy(&out.stdout);
+            let port_str = format!(":{}", port);
+            let mut pids = std::collections::HashSet::new();
+            for line in text.lines() {
+                if line.contains(&port_str) && line.contains("LISTENING") {
+                    if let Some(pid) = line.split_whitespace().last() {
+                        pids.insert(pid.to_string());
+                    }
+                }
+            }
+            for pid in pids {
+                let _ = std::process::Command::new("taskkill")
+                    .args(["/PID", &pid, "/F"])
+                    .status();
+            }
+            Ok(())
+        }
+        _ => Err("不支持的操作系统".to_string()),
+    }
 }
 
 // ── 内部工具函数 ────────────────────────────────────────────
@@ -366,6 +454,7 @@ pub fn run() {
             get_system_info,
             open_dir,
             start_openclaw,
+            kill_port_process,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
