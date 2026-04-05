@@ -5,7 +5,6 @@ CARGO_DIR := src-tauri
 BUILD_DIR := ./builds
 VERSION := $(shell node -p "require('./package.json').version")
 DIST_MAC := $(CARGO_DIR)/target/aarch64-apple-darwin/release/bundle/dmg
-DIST_WIN := $(CARGO_DIR)/target/x86_64-pc-windows-gnu/release/bundle/nsis
 
 help:
 	@echo "OpenClaw Helper 打包工具"
@@ -25,15 +24,12 @@ check:
 	@rustup target list --installed | grep aarch64-apple-darwin > /dev/null && echo "✓ Mac 目标已安装" || echo "✗ Mac 目标未安装 (run: rustup target add aarch64-apple-darwin)"
 	@rustup target list --installed | grep x86_64-pc-windows-gnu > /dev/null && echo "✓ Windows 目标已安装" || echo "✗ Windows 目标未安装 (run: rustup target add x86_64-pc-windows-gnu)"
 	@which x86_64-w64-mingw32-gcc > /dev/null && echo "✓ MinGW-w64 已安装" || echo "✗ MinGW-w64 未安装 (run: brew install mingw-w64)"
-	@which makensis > /dev/null && echo "✓ NSIS 已安装" || echo "✗ NSIS 未安装 (run: brew install nsis)"
 
 install-deps:
 	@echo "安装 Rust Windows 交叉编译目标..."
 	@rustup target add x86_64-pc-windows-gnu
 	@echo "安装 MinGW-w64..."
 	@brew install mingw-w64
-	@echo "安装 NSIS..."
-	@brew install nsis
 	@echo "创建 .cargo/config.toml..."
 	@mkdir -p $(CARGO_DIR)/.cargo
 	@printf '[target.x86_64-pc-windows-gnu]\nlinker = "x86_64-w64-mingw32-gcc"\nar = "x86_64-w64-mingw32-ar"\n' > $(CARGO_DIR)/.cargo/config.toml
