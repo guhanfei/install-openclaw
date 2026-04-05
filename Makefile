@@ -40,6 +40,7 @@ build-mac:
 	@mkdir -p $(BUILD_DIR)
 	@npm run tauri build -- --target aarch64-apple-darwin
 	@cp $(DIST_MAC)/*.dmg $(BUILD_DIR)/install-openclaw-$(VERSION)-macos-arm64.dmg
+	@hdiutil detach /Volumes/OpenClaw-Helper 2>/dev/null || true
 	@echo "Mac 安装包位于: $(BUILD_DIR)/install-openclaw-$(VERSION)-macos-arm64.dmg"
 
 build-win:
