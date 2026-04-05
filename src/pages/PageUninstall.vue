@@ -8,7 +8,7 @@
         <span class="warning-icon">⚠️</span>
         <div>
           <p class="warning-title">此操作不可撤销</p>
-          <p class="warning-desc">将执行 <code>npm uninstall -g openclaw</code>，并可选删除 <code>~/.openclaw</code> 配置目录。</p>
+          <p class="warning-desc">将执行 <code>openclaw uninstall --all --yes --non-interactive</code>，并可选删除 <code>~/.openclaw</code> 配置目录。</p>
         </div>
       </div>
     </section>
@@ -80,7 +80,7 @@ async function startUninstall() {
 
   try {
     addLog("▶ 开始卸载 openclaw...", "info");
-    await invoke("run_command_streaming", { cmd: "npm", args: ["uninstall", "-g", "openclaw"] });
+    await invoke("run_command_streaming", { cmd: "openclaw", args: ["uninstall", "--all", "--yes", "--non-interactive"] });
     addLog("✓ openclaw 已卸载", "success");
 
     if (removeConfig.value) {

@@ -75,8 +75,8 @@
       <div class="tip-card">
         <p>💡 <strong>说明</strong></p>
         <ul>
-          <li>执行 <code>npm install -g openclaw</code> 完成升级。</li>
-          <li>升级后如 OpenClaw 正在运行，需在「启动/停止」页重启服务。</li>
+          <li>执行 <code>openclaw update</code> 完成升级，会自动检测安装方式并重启 gateway。</li>
+          <li>升级过程中 OpenClaw 会短暂中断，完成后自动恢复运行。</li>
         </ul>
       </div>
     </section>
@@ -156,7 +156,7 @@ async function startUpgrade() {
   });
 
   try {
-    await invoke("run_command_streaming", { cmd: "npm", args: ["install", "-g", "openclaw"] });
+    await invoke("run_command_streaming", { cmd: "openclaw", args: ["update", "--yes"] });
     logs.value.push({ text: "✓ 升级完成", level: "success" });
     resultMsg.value = "✓ 升级成功";
     resultType.value = "ok";

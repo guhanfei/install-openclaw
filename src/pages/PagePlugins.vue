@@ -132,38 +132,17 @@ function buildPluginList() {
   }));
 }
 
-async function persistConfig() {
-  await invoke("write_config", {
-    filename: "openclaw.json",
-    content: JSON.stringify(rawConfig.value, null, 2),
-  });
-}
-
 async function togglePlugin(id: string, enable: boolean) {
-  if (!rawConfig.value.plugins) rawConfig.value.plugins = {};
-  const cfg = rawConfig.value.plugins;
-
-  // 更新 allow 列表
-  let allow = cfg.allow ?? [];
-  if (enable) {
-    if (!allow.includes(id)) allow = [...allow, id];
-  } else {
-    allow = allow.filter((a) => a !== id);
-  }
-  cfg.allow = allow;
-
-  // 更新 entries
-  if (!cfg.entries) cfg.entries = {};
-  if (!cfg.entries[id]) cfg.entries[id] = { enabled: enable };
-  else cfg.entries[id].enabled = enable;
-
-  rawConfig.value = { ...rawConfig.value, plugins: cfg };
-  buildPluginList();
-
+  busy.value = id;
+  errorMsg.value = "";
   try {
-    await persistConfig();
+    const subcmd = enable ? "enable" : "disable";
+    await invoke("run_command_streaming", { cmd: "openclaw", args: ["plugins", subcmd, id] });
+    await loadPlugins();
   } catch (err) {
-    errorMsg.value = `保存失败：${err}`;
+    errorMsg.value = `${enable ? "启用" : "禁用"}失败：${err}`;
+  } finally {
+    busy.value = "";
   }
 }
 
@@ -171,14 +150,9 @@ async function installPlugin() {
   const pkg = newPkg.value.trim();
   if (!pkg) return;
 
-  const pluginId = pkg;                              // 完整包名作为配置 key
-  const dirName = pkg.split("/").pop() ?? pkg;       // 仅用于文件系统路径
-
   busy.value = "install";
   logs.value = [];
   errorMsg.value = "";
-
-  const extensionsDir = `${await homeDir()}/.openclaw/extensions/${dirName}`;
 
   const unlisten = await listen<{ text: string; level: string }>("log", (e) => {
     logs.value.push({ text: e.payload.text, level: e.payload.level as LogLine["level"] });
@@ -186,35 +160,10 @@ async function installPlugin() {
   });
 
   try {
-    // npm install --prefix <path> <pkg>
-    await invoke("run_command_streaming", {
-      cmd: "npm",
-      args: ["install", "--prefix", extensionsDir, pkg],
-    });
-
-    // 更新 openclaw.json
-    if (!rawConfig.value.plugins) rawConfig.value.plugins = {};
-    const cfg = rawConfig.value.plugins;
-    if (!cfg.installs) cfg.installs = {};
-    if (!cfg.allow) cfg.allow = [];
-    if (!cfg.entries) cfg.entries = {};
-
-    cfg.installs[pluginId] = {
-      source: "npm",
-      spec: pkg,
-      installPath: extensionsDir,
-      version: "latest",
-      installedAt: new Date().toISOString(),
-    };
-    if (!cfg.allow.includes(pluginId)) cfg.allow.push(pluginId);
-    cfg.entries[pluginId] = { enabled: true };
-
-    rawConfig.value = { ...rawConfig.value, plugins: cfg };
-    await persistConfig();
-    buildPluginList();
-
+    await invoke("run_command_streaming", { cmd: "openclaw", args: ["plugins", "install", pkg] });
+    logs.value.push({ text: `✓ ${pkg} 安装成功`, level: "success" });
     newPkg.value = "";
-    logs.value.push({ text: `✓ ${pluginId} 安装成功`, level: "success" });
+    await loadPlugins();
   } catch (err) {
     errorMsg.value = `安装失败：${err}`;
     logs.value.push({ text: `✗ 失败：${err}`, level: "error" });
@@ -228,24 +177,10 @@ async function uninstallPlugin(id: string) {
   busy.value = id;
   logs.value = [];
   errorMsg.value = "";
-
-  const plugin = pluginList.value.find((p) => p.id === id);
-  const installPath = plugin?.installPath || `${await homeDir()}/.openclaw/extensions/${id}`;
-
   try {
-    // 用 Rust 跨平台删除目录（macOS/Windows 均可用，不需要 rm -rf）
-    await invoke("delete_dir", { path: installPath });
-
-    // 从 openclaw.json 中移除
-    const cfg = rawConfig.value.plugins ?? {};
-    delete cfg.installs?.[id];
-    cfg.allow = (cfg.allow ?? []).filter((a) => a !== id);
-    delete cfg.entries?.[id];
-    rawConfig.value = { ...rawConfig.value, plugins: cfg };
-    await persistConfig();
-    buildPluginList();
-
+    await invoke("run_command_streaming", { cmd: "openclaw", args: ["plugins", "uninstall", id] });
     logs.value.push({ text: `✓ ${id} 已卸载`, level: "success" });
+    await loadPlugins();
   } catch (err) {
     errorMsg.value = `卸载失败：${err}`;
   } finally {
@@ -253,9 +188,6 @@ async function uninstallPlugin(id: string) {
   }
 }
 
-async function homeDir(): Promise<string> {
-  return invoke<string>("get_home_dir");
-}
 </script>
 
 <style scoped>

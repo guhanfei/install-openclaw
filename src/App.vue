@@ -8,11 +8,20 @@
       </div>
       <nav class="sidebar-nav">
         <button v-for="item in navItems" :key="item.id" class="nav-item" :class="{ active: currentPage === item.id }"
-          @click="currentPage = item.id">
+          @click="handleNavClick(item.id, '')">
           <component :is="item.icon" class="nav-icon" :size="16" :stroke-width="1.6" />
           <span>{{ item.label }}</span>
         </button>
       </nav>
+      <div class="sidebar-bottom">
+        <button v-for="item in bottomNavItems" :key="item.id" class="nav-item"
+          :class="{ active: !item.external && currentPage === item.id }"
+          @click="handleNavClick(item.id, item.external)">
+          <component :is="item.icon" class="nav-icon" :size="16" :stroke-width="1.6" />
+          <span>{{ item.label }}</span>
+          <span v-if="item.external" class="ext-icon">↗</span>
+        </button>
+      </div>
       <div class="sidebar-footer">
         <div class="version-badge">v{{ appVersion }}</div>
       </div>
@@ -30,7 +39,9 @@ import { ref, computed } from "vue";
 import {
   PackagePlus, Power, ArrowUpCircle,
   BrainCircuit, Wand2, Puzzle, Trash2,
+  BookOpen, Info,
 } from "lucide-vue-next";
+import { open } from "@tauri-apps/plugin-shell";
 import PageInstall from "./pages/PageInstall.vue";
 import PageModels from "./pages/PageModels.vue";
 import PageSkills from "./pages/PageSkills.vue";
@@ -38,6 +49,7 @@ import PagePlugins from "./pages/PagePlugins.vue";
 import PageService from "./pages/PageService.vue";
 import PageUpdate from "./pages/PageUpdate.vue";
 import PageUninstall from "./pages/PageUninstall.vue";
+import PageAbout from "./pages/PageAbout.vue";
 
 const appVersion = "0.1.0";
 
@@ -51,7 +63,20 @@ const navItems = [
   { id: "uninstall", icon: Trash2,         label: "卸载 OpenClaw" },
 ];
 
+const bottomNavItems = [
+  { id: "docs",  icon: BookOpen, label: "官网文档", external: "https://docs.openclaw.ai" },
+  { id: "about", icon: Info,     label: "关于",     external: "" },
+];
+
 const currentPage = ref("install");
+
+function handleNavClick(id: string, external: string) {
+  if (external) {
+    open(external);
+  } else {
+    currentPage.value = id;
+  }
+}
 
 const currentComponent = computed(() => {
   const map: Record<string, unknown> = {
@@ -62,6 +87,7 @@ const currentComponent = computed(() => {
     service: PageService,
     update: PageUpdate,
     uninstall: PageUninstall,
+    about: PageAbout,
   };
   return map[currentPage.value];
 });
@@ -135,6 +161,20 @@ const currentComponent = computed(() => {
 .nav-icon {
   width: 20px;
   flex-shrink: 0;
+}
+
+.sidebar-bottom {
+  padding: 8px;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ext-icon {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-left: auto;
 }
 
 .sidebar-footer {

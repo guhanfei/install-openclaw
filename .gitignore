@@ -66,3 +66,8 @@ coverage/
 # 临时文件
 *.tmp
 *.temp
+.claude
+.trae
+.qoder
+.cursor
+.vscode

@@ -186,6 +186,23 @@ fn check_openclaw_running(port: u16) -> bool {
     std::net::TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok()
 }
 
+/// 检测 openclaw gateway daemon 是否已安装为系统服务
+#[tauri::command]
+fn check_daemon_installed() -> bool {
+    let home = std::env::var("HOME")
+        .or_else(|_| std::env::var("USERPROFILE"))
+        .unwrap_or_else(|_| ".".to_string());
+    match std::env::consts::OS {
+        "macos" => std::path::Path::new(&home)
+            .join("Library/LaunchAgents/ai.openclaw.gateway.plist")
+            .exists(),
+        "linux" => std::path::Path::new(&home)
+            .join(".config/systemd/user/openclaw-gateway.service")
+            .exists(),
+        _ => false, // Windows 暂不检测文件，依赖 CLI 返回
+    }
+}
+
 /// 执行命令并返回 stdout 字符串（用于需要捕获输出的场景，如 npm view）
 #[tauri::command]
 async fn run_command_output(app: tauri::AppHandle, cmd: String, args: Vec<String>) -> Result<String, String> {
@@ -194,10 +211,11 @@ async fn run_command_output(app: tauri::AppHandle, cmd: String, args: Vec<String
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// 启动 openclaw（后台非阻塞，不等待退出）
+/// 启动 openclaw gateway（后台非阻塞）
 #[tauri::command]
 fn start_openclaw() -> Result<(), String> {
     std::process::Command::new("openclaw")
+        .args(["gateway", "run"])
         .spawn()
         .map(|_| ())
         .map_err(|e| e.to_string())
@@ -255,6 +273,7 @@ pub fn run() {
             get_os,
             run_command_output,
             check_openclaw_running,
+            check_daemon_installed,
             start_openclaw,
         ])
         .run(tauri::generate_context!())

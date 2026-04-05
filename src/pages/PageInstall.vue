@@ -127,9 +127,9 @@ const installSteps = ref<InstallStep[]>([
     win: { cmd: "choco", args: ["install", "git", "-y"] },
   },
   {
-    name: "安装 Node.js 24 LTS", desc: "通过包管理器安装",
+    name: "安装 Node.js LTS", desc: "通过包管理器安装",
     status: "pending", statusText: "等待",
-    mac: { cmd: "brew", args: ["install", "node@24"] },
+    mac: { cmd: "brew", args: ["install", "node"] },
     win: { cmd: "choco", args: ["install", "nodejs-lts", "-y"] },
   },
   {
