@@ -44,11 +44,11 @@ build-mac:
 	@echo "Mac 安装包位于: $(BUILD_DIR)/install-openclaw-$(VERSION)-macos-arm64.dmg"
 
 build-win:
-	@echo "正在打包 Windows 版本..."
-	@mkdir -p $(BUILD_DIR)
-	@npm run tauri build -- --target x86_64-pc-windows-gnu || true
-	@cp $(CARGO_DIR)/target/x86_64-pc-windows-gnu/release/openclaw-helper.exe $(BUILD_DIR)/install-openclaw-$(VERSION)-windows-x86_64.exe
-	@echo "Windows 安装包位于: $(BUILD_DIR)/install-openclaw-$(VERSION)-windows-x86_64.exe"
+	@echo "⚠ macOS ARM 上的 makensis 3.11 有已知 crash，Windows 安装包请通过 GitHub Actions 构建："
+	@echo "   1. git push 到 Gitee/GitHub"
+	@echo "   2. 在 Actions 页手动触发 'Build Windows Installer'"
+	@echo "   3. 下载产物 install-openclaw-*-windows-x86_64-setup.exe"
+	@echo "   或推送 v* tag 自动触发"
 
 all: build-mac build-win
 
